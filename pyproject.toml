@@ -1,0 +1,19 @@
+[project]
+name = "lccfq_sim"
+version = "0.1.0"
+description = "Simulator for LCCF QPU"
+authors = [{name = "Santiago Nunez-Corrales", email = "nunezco2@illinois.edu"}]
+requires-python = ">=3.12,<3.13"
+
+[tool.black]
+line-length = 100
+
+[tool.mypy]
+strict = true
+
+[tool.ruff]
+line-length = 100
+
+[build-system]
+requires = ["uv>=0.1"]
+build-backend = "uv.build"
