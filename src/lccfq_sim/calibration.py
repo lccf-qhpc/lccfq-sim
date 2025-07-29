@@ -11,8 +11,7 @@ Contact: nunezco2@illinois.edu
 """
 import numpy as np
 
-from qutip import basis, mesolve, sigmax, tensor, Qobj, identity
-from typing import List
+from qutip import basis, mesolve, sigmax, tensor, Qobj, identity, destroy
 from .device import QPUDevice
 
 
@@ -67,3 +66,45 @@ def qubit_spectroscopy(
         excitation_probs.append(prob)
 
     return np.array(excitation_probs)
+
+def resonator_spectroscopy(
+    device,
+    resonator_id: str,
+    freq_range: np.ndarray,
+    drive_duration: float = 100.0
+) -> float:
+    idx = device.get_subsystem_index(resonator_id)
+    d = device.hilbertspace.subsystem_list[idx].truncated_dim
+    a = destroy(d)
+    drive_op = a + a.dag()
+    n = destroy(d).dag() * destroy(d)
+
+    n_op = tensor([
+        n if i == idx else identity(sub.truncated_dim)
+        for i, sub in enumerate(device.hilbertspace.subsystem_list)
+    ])
+
+    drive = tensor([
+        drive_op if i == idx else identity(sub.truncated_dim)
+        for i, sub in enumerate(device.hilbertspace.subsystem_list)
+    ])
+
+    print(drive)
+
+    psi0 = tensor([
+        basis(sub.truncated_dim, 0) for sub in device.hilbertspace.subsystem_list
+    ])
+
+    tlist = np.linspace(0, drive_duration, 200)
+    results = []
+
+    for freq in freq_range:
+        H0 = device.get_qutip_hamiltonian()
+        H_t = [H0, [drive + drive.dag(), lambda t, args=None: np.cos(2 * np.pi * freq * t)]]
+        result = mesolve(H_t, psi0, tlist, e_ops=[n_op])
+        avg_n = np.mean(result.expect[0])
+        results.append(avg_n)
+
+    best_idx = int(np.argmax(results))
+    return freq_range[best_idx]
+
