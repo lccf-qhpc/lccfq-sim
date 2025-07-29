@@ -12,11 +12,20 @@ Contact: nunezco2@illinois.edu
 import numpy as np
 import scqubits as scq
 
-from typing import List, Optional
-from qutip import Qobj, tensor, identity, basis
+from qutip import Qobj, tensor, identity
+from typing import List, Optional, Callable
+from dataclasses import dataclass
+from .gates import NATIVE_GATES
 
 
-class TransmonDevice:
+@dataclass
+class NativeGate:
+    name: str
+    arity: int
+    generator: Callable[[List[str]], Qobj]
+
+
+class QPUDevice:
     def __init__(
         self,
         num_qubits: int,
@@ -27,7 +36,7 @@ class TransmonDevice:
         readout_freqs: Optional[List[float]] = None,
         bus_freqs: Optional[List[float]] = None,
         g_qr: Optional[List[float]] = None,
-        g_qb: Optional[List[float]] = None,
+        g_qb: Optional[List[float]] = None
     ):
         self.num_qubits = num_qubits
         self.q_freqs = qubit_freqs or [5.0 + 0.1 * i for i in range(num_qubits)]
@@ -48,6 +57,10 @@ class TransmonDevice:
         self._build_subsystems(levels_qubit, levels_res)
         self._build_hilbertspace()
         self._add_interactions()
+
+        # Gates
+        self.native_gates = {}
+        self._register_native_gates()
 
     def _build_subsystems(self, levels_qubit: int, levels_res: int):
         for i in range(self.num_qubits):
@@ -199,3 +212,25 @@ class TransmonDevice:
         else:
             raise ValueError(f"Unknown solver: {solver}")
         return result
+
+    def _register_native_gates(self):
+        self.native_gates["X"] = NativeGate(
+            name="X", arity=1,
+            generator=lambda targets: self.embed_gate(NATIVE_GATES["X"](), targets)
+        )
+        self.native_gates["Y"] = NativeGate(
+            name="Y", arity=1,
+            generator=lambda targets: self.embed_gate(NATIVE_GATES["X"](), targets)
+        )
+        self.native_gates["SQiSWAP"] = NativeGate(
+            name="SQiSWAP", arity=2,
+            generator=lambda targets: self.embed_gate(NATIVE_GATES["SQISWAP_gate"](), targets)
+        )
+
+    def apply_named_gate(self, state: Qobj, gate_name: str, targets: List[str]) -> Qobj:
+        if gate_name not in self.native_gates:
+            raise ValueError(f"Unknown gate: {gate_name}")
+
+        gate = self.native_gates[gate_name]
+        U = gate.generator(targets)
+        return U * state

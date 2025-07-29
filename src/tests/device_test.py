@@ -12,13 +12,12 @@ Contact: nunezco2@illinois.edu
 import pytest
 import numpy as np
 from qutip import basis, tensor, sigmax, Qobj
-
-from lccfq_sim.device import TransmonDevice
+from lccfq_sim.device import QPUDevice
 
 
 @pytest.fixture
 def small_device():
-    return TransmonDevice(num_qubits=2)
+    return QPUDevice(num_qubits=2)
 
 
 def test_subsystem_ids(small_device):
@@ -110,3 +109,22 @@ def test_time_evolution_conserves_norm(small_device):
 
     norms = [psi.norm() for psi in result.states]
     assert all(abs(n - 1.0) < 1e-10 for n in norms)
+
+def test_apply_named_gate(small_device):
+    dim_q0 = small_device.hilbertspace.subsystem_list[0].truncated_dim
+    assert dim_q0 == 2, f"Test assumes Q0 is 2-level, got {dim_q0}"
+
+    psi0 = tensor([
+        basis(sub.truncated_dim, 0)
+        for sub in small_device.hilbertspace.subsystem_list
+    ])
+
+    psi1 = small_device.apply_named_gate(psi0, "X", ["Q0"])
+
+    # Confirm normalization
+    assert abs(psi1.norm() - 1.0) < 1e-10
+
+    # Fidelity check
+    target = tensor(basis(2, 1), basis(2, 0), basis(5, 0), basis(5, 0), basis(5, 0))
+    fidelity = abs((target.dag() * psi1))
+    assert abs(fidelity - 1.0) < 1e-10
