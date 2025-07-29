@@ -15,5 +15,5 @@ strict = true
 line-length = 100
 
 [build-system]
-requires = ["uv>=0.1"]
-build-backend = "uv.build"
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
