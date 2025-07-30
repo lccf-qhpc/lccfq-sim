@@ -10,13 +10,11 @@ License: Apache 2.0
 Contact: nunezco2@illinois.edu
 """
 import numpy as np
-from qutip import basis
 
 from lccfq_sim.device import QPUDevice
-from lccfq_sim.calibration import resonator_spectroscopy, qubit_spectroscopy
+from lccfq_sim.calibration import resonator_spectroscopy, qubit_spectroscopy, estimate_coupling_strength
 
 def test_qubit_spectroscopy_returns_expected_frequency():
-    # Create a simple device with 2-level transmons and readout resonators
     device = QPUDevice(
         num_qubits=2,
         levels_qubit=2,
@@ -56,3 +54,29 @@ def test_resonator_spectroscopy_returns_expected_frequency():
     expected_freq = 7.0
     print(f"Detected resonator frequency: {detected_freq}")
     assert abs(detected_freq - expected_freq) < 0.7
+
+def test_estimate_coupling_strength_returns_positive_value():
+    device = QPUDevice(
+        num_qubits=2,
+        levels_qubit=2,
+        levels_res=5,
+        qubit_freqs=[5.0, 5.2],
+        anharmonicities=[-0.2, -0.2],
+        readout_freqs=[7.0, 7.1],
+        bus_freqs=[5.0],
+        g_qr=[0.05, 0.05],
+        g_qb=[0.02, 0.02]
+    )
+
+    g_est = estimate_coupling_strength(
+        device,
+        qubit_id="Q0",
+        resonator_id="R_ro_0",
+        drive_duration=50,
+        drive_amplitude=0.1,
+        freq=5.0,
+        tlist=np.linspace(0, 50, 100)
+    )
+
+    assert g_est > 0.0, f"Estimated coupling should be positive, got {g_est}"
+    assert g_est < 1.0, f"Estimated coupling too large: {g_est}"

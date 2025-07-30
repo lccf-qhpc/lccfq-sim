@@ -108,3 +108,56 @@ def resonator_spectroscopy(
     best_idx = int(np.argmax(results))
     return freq_range[best_idx]
 
+def estimate_coupling_strength(
+    device,
+    qubit_id: str,
+    resonator_id: str,
+    drive_duration: float = 100,
+    drive_amplitude: float = 0.1,
+    freq: float = None,
+    tlist: np.ndarray = None
+) -> float:
+    hs = device.hilbertspace
+    H0 = device.get_qutip_hamiltonian()
+
+    qidx = device.get_subsystem_index(qubit_id)
+    qubit = hs.subsystem_list[qidx]
+    ridx = device.get_subsystem_index(resonator_id)
+    resonator = hs.subsystem_list[ridx]
+
+    if freq is None:
+        freq = qubit.get_freq()
+
+    if tlist is None:
+        tlist = np.linspace(0, drive_duration, 200)
+
+    psi0 = tensor([basis(sub.truncated_dim, 0) for sub in hs.subsystem_list])
+
+    a_q = destroy(qubit.truncated_dim)
+    a_r = destroy(resonator.truncated_dim)
+
+    def embed_single_op(op, target_subsys):
+        ops = [
+            op if sub is target_subsys else identity(sub.truncated_dim)
+            for sub in hs.subsystem_list
+        ]
+        return tensor(ops)
+
+    drive_op = embed_single_op(a_q + a_q.dag(), qubit)
+    n_r = embed_single_op(a_r.dag() * a_r, resonator)
+
+    H_t = [H0, [drive_op, lambda t, args: drive_amplitude * np.cos(2 * np.pi * freq * t)]]
+
+
+    result = mesolve(
+        H_t,
+        psi0,
+        tlist,
+        e_ops=[n_r]
+    )
+
+    avg_photons = np.array(result.expect[0])
+    peak = np.max(avg_photons)
+    g_est = np.sqrt(peak) / drive_duration if drive_duration > 0 else 0.0
+
+    return g_est
